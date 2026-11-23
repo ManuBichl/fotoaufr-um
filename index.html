@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Foto-Aufräumer Web</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f11;
+      color: #fff;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Obere Leiste */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      gap: 10px;
+    }
+    .counter {
+      background: rgba(255, 255, 255, 0.14);
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      font-size: 15px;
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .undo-btn {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      border: none;
+      padding: 9px 13px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .undo-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .trash-btn {
+      background: #e53935;
+      color: #fff;
+      border: none;
+      padding: 9px 15px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    /* Hauptbereich */
+    .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 16px;
+      overflow: hidden;
+      position: relative;
+    }
+    .stage img {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 18px;
+      object-fit: contain;
+      background: #1a1a1f;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    }
+
+    /* Start- & Endbildschirm */
+    .card-box {
+      text-align: center;
+      padding: 24px;
+      max-width: 420px;
+    }
+    .pick-btn {
+      background: #0a84ff;
+      color: #fff;
+      border: none;
+      padding: 16px 26px;
+      border-radius: 14px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+
+    /* Steuerung unten */
+    .controls {
+      padding: 12px 16px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .keep-btn {
+      width: 100%;
+      background: #2e7d32;
+      color: #fff;
+      border: none;
+      padding: 17px;
+      border-radius: 16px;
+      font-size: 19px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .keep-btn:active {
+      transform: scale(0.99);
+      background: #256628;
+    }
+
+    /* Rote Swipe-Fläche wie beim iPhone-Anruf */
+    .swipe-track {
+      position: relative;
+      height: 62px;
+      background: #d32f2f;
+      border-radius: 31px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      overflow: hidden;
+    }
+    .swipe-label {
+      font-weight: 700;
+      font-size: 15px;
+      color: rgba(255, 255, 255, 0.94);
+      padding-left: 44px;
+      pointer-events: none;
+    }
+    .swipe-knob {
+      position: absolute;
+      left: 5px;
+      top: 5px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #fff;
+      color: #d32f2f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 20px;
+      touch-action: none;
+      cursor: grab;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    /* Papierkorb-Modal */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: #18181c;
+      display: none;
+      flex-direction: column;
+      z-index: 30;
+    }
+    .modal.open { display: flex; }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid #2a2a32;
+    }
+    .modal-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+    }
+    .trash-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #2a2a32;
+    }
+    .trash-item img {
+      width: 58px;
+      height: 58px;
+      border-radius: 10px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .trash-meta {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .trash-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .trash-size {
+      font-size: 12px;
+      color: #9a9aa6;
+    }
+    .restore-btn {
+      margin-left: auto;
+      background: #2c2c34;
+      color: #fff;
+      border: none;
+      padding: 8px 13px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .modal-footer {
+      padding: 14px 16px 26px;
+      border-top: 1px solid #2a2a32;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .delete-final-btn {
+      width: 100%;
+      background: #e53935;
+      color: #fff;
+      border: none;
+      padding: 16px;
+      border-radius: 14px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="topbar" id="topbar" style="display:none;">
+    <div class="counter" id="counter">1/1</div>
+    <div class="top-actions">
+      <button class="undo-btn" id="undoBtn" disabled>↩ Zurück</button>
+      <button class="trash-btn" id="openTrashBtn">🗑️ <span id="trashCount">0</span></button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="card-box" id="startBox">
+      <h2>Foto-Aufräumer</h2>
+      <p style="color:#a1a1aa; line-height:1.45;">
+        Wähle Fotos aus deiner Galerie aus. Danach gehst du sie eins nach dem anderen durch:
+        grün zum Behalten, rot wischen für den Papierkorb.
+      </p>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      <button class="pick-btn" onclick="document.getElementById('fileInput').click()">Fotos auswählen</button>
+    </div>
+  </div>
+
+  <div class="controls" id="controls" style="display:none;">
+    <button class="keep-btn" id="keepBtn">Behalten</button>
+    <div class="swipe-track" id="swipeTrack">
+      <div class="swipe-knob" id="swipeKnob">»</div>
+      <div class="swipe-label">Schieben für Papierkorb</div>
+    </div>
+  </div>
+
+  <!-- Papierkorb -->
+  <div class="modal" id="trashModal">
+    <div class="modal-header">
+      <button onclick="closeTrash()" style="background:none;border:none;color:#0a84ff;font-size:16px;cursor:pointer;">Schließen</button>
+      <strong id="modalTitle">Papierkorb (0)</strong>
+      <span style="width:64px;"></span>
+    </div>
+    <div class="modal-list" id="trashList"></div>
+    <div class="modal-footer">
+      <button class="delete-final-btn" id="deleteFinalBtn">Endgültig löschen</button>
+    </div>
+  </div>
+
+  <script>
+    let photos = [];
+    let currentIndex = 0;
+    let trash = [];
+    let historyStack = []; // Für "Rückgängig"
+
+    const fileInput = document.getElementById('fileInput');
+    const stage = document.getElementById('stage');
+    const topbar = document.getElementById('topbar');
+    const controls = document.getElementById('controls');
+    const counter = document.getElementById('counter');
+    const trashCount = document.getElementById('trashCount');
+    const undoBtn = document.getElementById('undoBtn');
+
+    function formatKB(bytes) {
+      return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      // Alte URLs aufräumen
+      photos.forEach(p => URL.revokeObjectURL(p.url));
+
+      photos = files.map((file, idx) => ({
+        id: `${idx}-${file.name}-${file.lastModified}`,
+        name: file.name,
+        size: file.size,
+        url: URL.createObjectURL(file)
+      }));
+
+      currentIndex = 0;
+      trash = [];
+      historyStack = [];
+
+      topbar.style.display = 'flex';
+      controls.style.display = 'flex';
+      renderCurrent();
+    });
+
+    function updateHeader() {
+      trashCount.textContent = trash.length;
+      undoBtn.disabled = historyStack.length === 0;
+      if (photos.length > 0) {
+        const shownPos = Math.min(currentIndex + 1, photos.length);
+        counter.textContent = `${shownPos}/${photos.length}`;
+      }
+    }
+
+    function renderCurrent() {
+      updateHeader();
+
+      if (currentIndex >= photos.length) {
+        controls.style.display = 'none';
+        stage.innerHTML = `
+          <div class="card-box">
+            <h2>Alle ${photos.length} Fotos durchgegangen!</h2>
+            <p style="color:#a1a1aa;">Im Papierkorb liegen aktuell ${trash.length} Fotos.</p>
+            <button class="trash-btn" style="margin: 14px auto 0; padding: 14px 22px;" onclick="openTrash()">
+              Papierkorb öffnen (${trash.length})
+            </button>
+            <button class="undo-btn" style="display:block; margin: 12px auto 0;" onclick="restartSession()">
+              Nochmal von vorn
+            </button>
+          </div>`;
+        return;
+      }
+
+      controls.style.display = 'flex';
+      stage.innerHTML = `<img src="${photos[currentIndex].url}" alt="${photos[currentIndex].name}" />`;
+    }
+
+    function restartSession() {
+      currentIndex = 0;
+      historyStack = [];
+      renderCurrent();
+    }
+
+    // Grün: Behalten
+    document.getElementById('keepBtn').addEventListener('click', () => {
+      if (currentIndex >= photos.length) return;
+      historyStack.push({ index: currentIndex, movedToTrash: false });
+      currentIndex++;
+      renderCurrent();
+    });
+
+    // Rückgängig
+    undoBtn.addEventListener('click', () => {
+      const last = historyStack.pop();
+      if (!last) return;
+      if (last.movedToTrash) {
+        trash.pop();
+      }
+      currentIndex = last.index;
+      renderCurrent();
+    });
+
+    // Rote Swipe-Fläche (Touch + Maus)
+    const track = document.getElementById('swipeTrack');
+    const knob = document.getElementById('swipeKnob');
+    let dragging = false;
+    let startX = 0;
+
+    function startDrag(clientX) {
+      if (currentIndex >= photos.length) return;
+      dragging = true;
+      startX = clientX;
+      knob.style.transition = 'none';
+    }
+
+    function moveDrag(clientX) {
+      if (!dragging) return;
+      const maxDrag = track.clientWidth - knob.clientWidth - 10;
+      const dx = Math.max(0, Math.min(clientX - startX, maxDrag));
+      knob.style.transform = `translateX(${dx}px)`;
+    }
+
+    function endDrag(clientX) {
+      if (!dragging) return;
+      dragging = false;
+      const maxDrag = track.clientWidth - knob.clientWidth - 10;
+      const dx = clientX - startX;
+      knob.style.transition = 'transform 0.2s ease';
+      knob.style.transform = 'translateX(0px)';
+
+      if (dx >= maxDrag * 0.72) {
+        trash.push(photos[currentIndex]);
+        historyStack.push({ index: currentIndex, movedToTrash: true });
+        currentIndex++;
+        renderCurrent();
+      }
+    }
+
+    knob.addEventListener('touchstart', (e) => startDrag(e.touches[0].clientX), { passive: true });
+    knob.addEventListener('touchmove', (e) => moveDrag(e.touches[0].clientX), { passive: true });
+    knob.addEventListener('touchend', (e) => endDrag(e.changedTouches[0].clientX));
+
+    knob.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startDrag(e.clientX);
+      const onMouseMove = (ev) => moveDrag(ev.clientX);
+      const onMouseUp = (ev) => {
+        endDrag(ev.clientX);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    });
+
+    // Papierkorb
+    document.getElementById('openTrashBtn').addEventListener('click', openTrash);
+
+    function openTrash() {
+      document.getElementById('modalTitle').textContent = `Papierkorb (${trash.length})`;
+      const list = document.getElementById('trashList');
+      if (!trash.length) {
+        list.innerHTML = '<p style="color:#8e8e9a; text-align:center; margin-top:44px;">Papierkorb ist leer.</p>';
+      } else {
+        list.innerHTML = trash.map((item, i) => `
+          <div class="trash-item">
+            <img src="${item.url}" alt="${item.name}" />
+            <div class="trash-meta">
+              <span class="trash-name">${item.name}</span>
+              <span class="trash-size">${formatKB(item.size)}</span>
+            </div>
+            <button class="restore-btn" onclick="restoreItem(${i})">Zurück</button>
+          </div>
+        `).join('');
+      }
+      document.getElementById('trashModal').classList.add('open');
+    }
+
+    function closeTrash() {
+      document.getElementById('trashModal').classList.remove('open');
+      renderCurrent();
+    }
+
+    function restoreItem(idx) {
+      trash.splice(idx, 1);
+      openTrash();
+      updateHeader();
+    }
+
+    document.getElementById('deleteFinalBtn').addEventListener('click', () => {
+      if (!trash.length) {
+        alert('Im Papierkorb liegen aktuell keine Fotos.');
+        return;
+      }
+      const count = trash.length;
+      trash.forEach(item => URL.revokeObjectURL(item.url));
+      trash = [];
+      updateHeader();
+      openTrash();
+      alert(`${count} Foto(s) wurden aus dem Papierkorb endgültig gelöscht.`);
+    });
+  </script>
+</body>
+</html>
